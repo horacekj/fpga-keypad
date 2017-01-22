@@ -1,0 +1,86 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[unicode]{hyperref}
+\usepackage[czech]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\textwidth 16cm \textheight 24.6cm
+\topmargin -1.3cm 
+\oddsidemargin 0cm
+\usepackage{url}
+\usepackage{listings}
+
+\begin{document}
+
+\setcounter{page}{1}  % nastaví čítač stránek znovu od jedné
+\pagenumbering{arabic} % číslování arabskymi číslicemi
+
+\title{\normalsize Projekt předmětu PB170 \\ \huge Čtečka klávesnice KeyPad \\ \normalsize semestr podzim 2016, FI MUNI}
+\author{Jan Horáček\\
+	445326}
+\date{\today}
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Popis projektu}
+
+Tématem projektu je načítání stavu tlačítkové klávesnice F-KV16KEY\footnote{\href{https://www.gme.cz/f-kv16key-black}{https://www.gme.cz/f-kv16key-black}}, resp. libovolné jiné klávesnice
+splňující standard, kterým komunikuje tato klávesnice. K vizualizaci načítaných hodnot jsou využity
+segmentové displeje.
+
+Projekt je vyvíjen v prostředí Quartus II 13.0 pro vývojovou desku Altera DE2.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Zapojení hardware}
+
+Keypad je připojen na GPIO konektor \texttt{GPIO II}, konkrétně sloupce jsou připojeny na piny 1-4 jako vstupy
+a řádky na piny 5-8 jako výstupy. Sloupce musí být opatřeny pull-up rezistory.
+
+Žádný další hardware není nutný.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Popis funkce}
+
+Přiložená implementace načítá stav klávesnice pomocí skenování přes
+jednotlivé řádky a~postupné čtení vstupních pinů. Každý přečtený znak
+(mimo znaků \texttt{*} a \texttt{\#}) je zapsán na nejpravější segment
+segmentového displeje vestavěného do Altera II. Již zobrazené znaky
+jsou posunuty o jeden segment doleva. Znaky \texttt{*} a \texttt{\#}
+způsobí vymazání všech displejů.
+
+FPGA by mělo bez problému zvládat stisk více kláves zároveň.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implementace}
+
+Přiložený soubor \texttt{keyboard.v} obsahuje implementaci kořenového
+modulu, který řeší veškerou logiku, soubor \texttt{divider.v} obsahuje
+implementaci děličky, která je využívána při skenování klávesnice.
+
+Modul \texttt{keyboard} instanciuje modul děličky tak, aby skenoval
+klávesnici s frekvencí $1\ kHz$ v always bloku. V always bloku je vždy
+provedeno uzemnění jednoho řádku, v~další iteraci přečtení vstupů a v další
+iteraci nastavení výstupu řádku do stavu vysoké impedance. Tento postup se
+opakuje pro každý řádek.
+
+V případě, že FPGA detekuje stisk nové klávesy, nastaví flag \texttt{new\_key}, který je využit jako trigger v druhém always bloku --
+bloku, který při stisku nové klávesy provede přenos na display.
+
+Druhý always blok nejdříve posune všechny znaky o jeden segment doleva a~následně podle indexu přečteného znaku provede jeho zobrazení na
+nejpravější displej.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Diskuze}
+
+Přiložený kód vypadá celkem přímočaře, přesto mi na něm přijde několik věcí
+zajímavých (a možná zbytečně složitých).
+
+\begin{itemize}
+	\item Při návrhu skenu kláves jsem se snažil nejdříve navrhnout synchonní always blok, který by v jedné iteraci přečetl celý řádek. Tedy by nejdříve zapnul výstup řádku, pak přečetl vstupy sloupců a následně opět vypnul výstup řádku. To se mi ale vůbec nedařilo. A nejhorší na tom je, že vůbec nevím proč. Zkoušel čekat mezi nastavením výstupu řádku a čtením vstupu s vírou v prodlevu způsobenou propagací signálu, ale to nemělo vůbec žádný efekt. Proto jsem se nakonec rozhodl načítání implementovat takto \uv{trojstupňově}.
+	\item Využití \texttt{new\_key} jako triggeru always bloku mi přijde nanejvýš hezké.
+	\item Překvapilo mě, že jsem vůbec nemusel řešit zákmity na vstupech. Nikdy se mi nestalo, že bych stiskem klávesy způsobil posun o víc, než jeden segment.
+	\item Opravdu si musím pro účely změny výstupů v always bloku vytvářet lokální proměnné \texttt{reg}, do kterých až mohu přiřazovat? U nastavování segmentových displejů vidím spoustu řádků kódu, které by tam potenciálně nemusely být.
+\end{itemize}
+
+\end{document}
